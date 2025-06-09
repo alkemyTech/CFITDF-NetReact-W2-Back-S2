@@ -70,10 +70,10 @@ builder.Services.AddScoped<IPermisoRepository, PermisoRepository>();
 // ─── CORS (para permitir llamadas desde Swagger u otros orígenes) ──────────────────────
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowSwagger", policy =>
+    options.AddPolicy("AllowLocalDev", policy =>
     {
         policy
-            .AllowAnyOrigin()   // Permitir cualquier origen para pruebas (ajusta según tu política real)
+            .WithOrigins("http://localhost:5173", "https://localhost:7153")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -109,7 +109,8 @@ var app = builder.Build();
 // ─── Middleware pipeline ──────────────────────────────────────────────────────────────
 
 // 1) CORS antes de todo lo demás
-app.UseCors("AllowSwagger");
+app.UseCors("AllowLocalDev");
+
 
 // 2) Swagger siempre disponible (no solo en Development)
 app.UseSwagger();

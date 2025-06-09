@@ -13,6 +13,7 @@ namespace digitalArsv1.Repositories
         // ✅  Agregar un movimiento al contexto (no guarda aún)
         Task CrearAsync(Movimiento movimiento);
 
+
         // ✅ Guardar cambios pendientes en el contexto
         Task SaveAsync();
 
@@ -31,6 +32,8 @@ namespace digitalArsv1.Repositories
             int nroCliente, DateTime fechaDesde, DateTime fechaHasta);
         Task<List<UltimosMovimientoDTO>> GetUltimosMovimientosPorClienteAsync(
            int nroCliente, DateTime fechaDesde, DateTime fechaHasta);
+        Task<bool> TransferirAsync(int nroCuentaOrigen, int nroCuentaDestino, decimal monto);
+
     }
 }
  

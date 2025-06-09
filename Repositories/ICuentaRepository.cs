@@ -13,5 +13,8 @@ namespace digitalArsv1.Repositories
         Task<bool> ExisteCuenta(int nroCuenta);
         Task CrearAsync(Cuenta cuenta);
         Task<List<Cuenta>> GetByClienteAsync(int nro_cliente);
+        // Nuevos métodos:
+        Task<Cuenta?> GetByCBUAsync(string cbu);
+        Task<Cuenta?> GetByAliasAsync(string alias);
     }
 }

@@ -50,30 +50,35 @@ namespace digitalArsv1.Repositories
         // Suma los montos recibidos (destino) y resta los montos enviados (origen)
         public async Task<decimal> ObtenerSaldoAsync(int nroCuenta)
         {
-            var ingresos = await _context.Movimientos
-                                         .Where(m => m.nro_cuenta_dest == nroCuenta)
-                                         .SumAsync(m => (decimal?)m.monto) ?? 0;
-
-            var egresos = await _context.Movimientos
-                                        .Where(m => m.nro_cuenta_orig == nroCuenta)
-                                        .SumAsync(m => (decimal?)m.monto) ?? 0;
-
-            return ingresos - egresos;
+            var cuenta = await _context.Cuentas.FirstOrDefaultAsync(c => c.nro_cuenta == nroCuenta);
+            return cuenta?.saldo ?? 0; // Si la cuenta no existe o el saldo es null, retorna 0
         }
-
         // ✅ NUEVO: Devuelve todas las cuentas asociadas a un cliente específico (nro_cliente)
         public async Task<List<Cuenta>> GetByClienteAsync(int nroCliente)
         {
             return await _context.Cuentas
-                             .Include(c => c.Usuario)        // Incluye usuario para acceder a nombre/apellido
-                             .Where(c => c.nro_cliente == nroCliente)
-                             .ToListAsync();
+         .Include(c => c.Usuario)
+         .Where(c => c.nro_cliente == nroCliente && c.estado == true)
+         .ToListAsync();
         }
 
         // ✅ NUEVO: Guarda cambios pendientes en el contexto (SaveChangesAsync)
         public async Task SaveAsync()
         {
             await _context.SaveChangesAsync();
+        }
+        public async Task<Cuenta?> GetByCBUAsync(string cbu)
+        {
+            return await _context.Cuentas
+                                 .Include(c => c.Usuario)
+                                 .FirstOrDefaultAsync(c => c.CBU == cbu);
+        }
+
+        public async Task<Cuenta?> GetByAliasAsync(string alias)
+        {
+            return await _context.Cuentas
+                                 .Include(c => c.Usuario)
+                                 .FirstOrDefaultAsync(c => c.alias == alias);
         }
     }
 }

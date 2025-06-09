@@ -1,4 +1,6 @@
-﻿namespace digitalArsv1.DTOs
+﻿using System.Text.Json.Serialization;
+
+namespace digitalArsv1.DTOs
 {
     public class RegisterRequest
     {
@@ -17,7 +19,10 @@
 
     public class LoginDTO
     {
+        [JsonPropertyName("mail")]
         public string Mail { get; set; }
+
+        [JsonPropertyName("password")]
         public string Password { get; set; }
     }
 

@@ -1,4 +1,5 @@
-﻿using digitalArsv1.Models;
+﻿using digitalArsv1.DTOs;
+using digitalArsv1.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -12,5 +13,10 @@ namespace digitalArsv1.Repositories
         Task<Usuario?> GetByMailWithCuentasAsync(string mail); // ← para ver cuentas de usuario
         Task CrearAsync(Usuario usuario);
         Task SaveAsync();
+        
+        Task<UsuarioProfileDTO> GetBasicProfileByIdAsync(int userId);
+        Task<bool> UpdateProfileAsync(UsuarioUpdateDTO updateDto);
+        Task<Usuario?> GetUsuarioByIdAsync(int id);
+
     }
 }

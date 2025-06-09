@@ -146,7 +146,7 @@ namespace digitalArsv1.Controllers
         // GET /api/Cuentas/por-cliente
         /// Devuelve solo NroCuenta, CBU, Nombre y Apellido del Usuario, y Saldo.
         
-        [Authorize(Roles = "Billetera")]
+        [Authorize(Roles = "BILLETERA")]
         [HttpGet("por-cliente")]
         public async Task<ActionResult<IEnumerable<CuentaResumenDTO>>> GetCuentasPorCliente()
         {

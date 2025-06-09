@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using static MovimientoDetalleDTO;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/movimientos")]
 public class MovimientosController : ControllerBase
 {
     private readonly ICuentaRepository _cuentaRepository;                             // **CAMBIO: agregado campo para repositorio de cuentas**
@@ -34,7 +34,7 @@ public class MovimientosController : ControllerBase
         return Ok(movimientos);
     }
 
-    [HttpGet("{id}")] // Busca un movimiento por su id (id_trx)
+    [HttpGet("{id:int}")] // Busca un movimiento por su id (id_trx)
     public async Task<ActionResult<Movimiento>> GetMovimiento(int id)
     {
         var movimiento = await _movimientoRepository.GetByIdAsync(id);
@@ -57,9 +57,10 @@ public class MovimientosController : ControllerBase
             return Ok(detalle);
         }
 
-        // ==== Obtener últimos 10 movimientos de la cuenta del usuario logueado dentro de un rango ====
-        // POST /api/Movimientos/ultimos/resumen
-        [HttpPost("resumen")]
+    // ==== Obtener últimos 10 movimientos de la cuenta del usuario logueado dentro de un rango ====
+    // POST /api/Movimientos/ultimos/resumen
+  [Authorize(Roles = "Billetera")]
+   [HttpPost("resumen")]
         public async Task<ActionResult<List<MovimientoDetalleDTO>>> GetResumenPorRango([FromBody] RangoFechasMovDTO rango)
         {
             // 1) Extraer nro_cliente del JWT
@@ -103,7 +104,9 @@ public class MovimientosController : ControllerBase
 
     // ==== MÉTODO PARA TRANSFERENCIA ENTRE CUENTAS
     // =============================================
-    [Authorize(Roles = "Billetera")]
+   
+    
+    [Authorize]
     [HttpPost("transferir")]
     public async Task<IActionResult> Transferir([FromBody] TransferenciaDTO dto)
     {
@@ -114,11 +117,8 @@ public class MovimientosController : ControllerBase
         if (dto.Monto <= 0)
             return BadRequest("El monto debe ser mayor que cero.");
 
-       
-
         // 2️⃣ Extraer nro_cliente del JWT (para verificar propiedad de la cuenta ORIGEN)
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
-                     ?? User.FindFirstValue("sub");
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
         if (!int.TryParse(userId, out var nroCliente))
             return Forbid("Token inválido.");
 
@@ -135,16 +135,22 @@ public class MovimientosController : ControllerBase
         if (dto.Monto > saldoOrigen)
             return BadRequest("Saldo insuficiente en la cuenta de origen.");
 
-        // 5️⃣ Intentar OBTENER CUENTA DESTINO; si no existe, marcamos “existeDestino = false”
+        // 5️⃣ Intentar OBTENER CUENTA DESTINO; buscar primero por alias, luego por CBU
         bool existeDestino = true;
-        var cuentaDestino = await _cuentaRepository.GetByIdWithUsuarioAsync(dto.NroCuentaDestino);
+        Cuenta? cuentaDestino = await _cuentaRepository.GetByAliasAsync(dto.Destino);
+
+        if (cuentaDestino == null)
+        {
+            cuentaDestino = await _cuentaRepository.GetByCBUAsync(dto.Destino);
+        }
+
         if (cuentaDestino == null)
         {
             existeDestino = false;
         }
         else
         {
-            // Opcional: evitar transferir a la misma cuenta
+            // Evitar transferir a la misma cuenta
             if (cuentaDestino.nro_cuenta == cuentaOrigen.nro_cuenta)
                 return BadRequest("La cuenta destino no puede coincidir con la de origen.");
         }
@@ -186,10 +192,9 @@ public class MovimientosController : ControllerBase
             fecha = DateTime.UtcNow,
             monto = dto.Monto,
             nro_cuenta_orig = cuentaOrigen.nro_cuenta,
-            nro_cuenta_dest = existeDestino ? dto.NroCuentaDestino : (int?)null,
+            nro_cuenta_dest = existeDestino ? cuentaDestino?.nro_cuenta : (int?)null,
             codigo_transaccion = 2
         };
-        // Ajustar saldo en la cuenta ORIGEN
         cuentaOrigen.saldo -= dto.Monto;
 
         // 9️⃣ Crear Movimiento de CRÉDITO en DESTINO (código 1), solo si existeDestino
@@ -201,12 +206,10 @@ public class MovimientosController : ControllerBase
                 id_trx = idCredito,
                 fecha = DateTime.UtcNow,
                 monto = dto.Monto,
-                // Para el registro de crédito, usamos “nro_cuenta_orig” = misma cuenta destino
-                nro_cuenta_orig = dto.NroCuentaDestino,
+                nro_cuenta_orig = cuentaOrigen.nro_cuenta,
                 nro_cuenta_dest = cuentaDestino.nro_cuenta,
                 codigo_transaccion = 1
             };
-            // Ajustar saldo en la cuenta DESTINO
             cuentaDestino.saldo += dto.Monto;
         }
 
@@ -215,7 +218,7 @@ public class MovimientosController : ControllerBase
         if (movCredito != null)
             await _movimientoRepository.CrearAsync(movCredito);
 
-        // 1️⃣1️⃣ Guardar cambios en Movimientos y luego en Cuentas (para persistir saldos)
+        // 1️⃣1️⃣ Guardar cambios en Movimientos y luego en Cuentas
         await _movimientoRepository.SaveAsync();
         await _cuentaRepository.SaveAsync();
 

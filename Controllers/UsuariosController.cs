@@ -113,45 +113,42 @@ public class UsuariosController : ControllerBase
             usuarioDto);
     }
     // ================================
-    [HttpPost("login")] // login del usuario creado anteriormente
-    public async Task<ActionResult<string>> Login([FromBody] LoginDTO dto)
+    [HttpPost("login")]
+    public async Task<ActionResult> Login([FromBody] LoginDTO dto)
     {
         // 1️⃣ Buscar el usuario por email
         var usuario = await _usuarioRepository.ObtenerPorEmailAsync(dto.Mail);
         if (usuario == null)
-            return Unauthorized("Credenciales inválidas.");  // ✅ NUEVO: separar existencia de usuario
+            return Unauthorized("Credenciales inválidas.");
 
-        // 2️⃣ Validar que el campo `password_hash` tenga formato BCrypt estándar
-        //    (debe empezar con "$2a$", "$2b$" o "$2y$")
+        // 2️⃣ Validar formato BCrypt del password_hash
         if (string.IsNullOrWhiteSpace(usuario.password_hash) ||
               !(usuario.password_hash.StartsWith("$2a$") ||
                 usuario.password_hash.StartsWith("$2b$") ||
                 usuario.password_hash.StartsWith("$2y$")))
         {
-            // Si el valor en BD NO es un hash BCrypt válido, devolvemos 401
-            return Unauthorized("Credenciales inválidas.");            // ✅ NUEVO
+            return Unauthorized("Credenciales inválidas.");
         }
 
-        // 3️⃣ Verificar la contraseña con try/catch para atrapar SaltParseException
+        // 3️⃣ Verificar la contraseña con try/catch
         try
         {
-            bool esValida = BCrypt.Net.BCrypt.Verify(dto.Password, usuario.password_hash); // ⚠️ AJUSTE
+            bool esValida = BCrypt.Net.BCrypt.Verify(dto.Password, usuario.password_hash);
             if (!esValida)
-                return Unauthorized("Credenciales inválidas.");                        // ✅ NUEVO
+                return Unauthorized("Credenciales inválidas.");
         }
         catch (BCrypt.Net.SaltParseException)
         {
-            // Si el hash en BD está malformado, devolvemos 401 sin exponer detalles
-            return Unauthorized("Credenciales inválidas.");                            // ✅ NUEVO
+            return Unauthorized("Credenciales inválidas.");
         }
 
         // 4️⃣ Crear claims y token JWT
         var claims = new[]
         {
-                new Claim(ClaimTypes.NameIdentifier, usuario.nro_cliente.ToString()),
-                new Claim(ClaimTypes.Email, usuario.mail),
-                new Claim(ClaimTypes.Role, "Billetera") // o el rol real que corresponda
-            };
+        new Claim(ClaimTypes.NameIdentifier, usuario.nro_cliente.ToString()),
+        new Claim(ClaimTypes.Email, usuario.mail),
+        new Claim(ClaimTypes.Role, "Billetera") // o el rol real que corresponda
+    };
 
         var key = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(_config["Jwt:Key"]));
@@ -165,12 +162,47 @@ public class UsuariosController : ControllerBase
             signingCredentials: creds
         );
 
-        return Ok(new JwtSecurityTokenHandler().WriteToken(token));
-    }
+        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
+        // 5️⃣ Devolver token y datos básicos del usuario en un objeto JSON
+        return Ok(new
+        {
+            token = tokenString,
+            usuario = new
+            {
+                nombre = usuario.nombre,
+                apellido = usuario.apellido,
+                mail = usuario.mail,
+                tipo_cliente = usuario.tipo_cliente
+            }
+        });
+    }
+    /*/////////////////////////////*/
+    [Authorize]
+    [HttpGet("perfil")]
+    public async Task<IActionResult> GetPerfil()
+    {
+        var email = User.FindFirstValue(ClaimTypes.Email);
+
+        var usuario = await _usuarioRepository.GetByMailWithCuentasAsync(email);
+
+        if (usuario == null)
+            return NotFound("Usuario no encontrado");
+
+        // Tomamos la primera cuenta activa (o la que corresponda) para mostrar datos
+        var cuenta = usuario.Cuentas.FirstOrDefault(c => c.estado);
+
+        return Ok(new
+        {
+            nombre = usuario.nombre,
+            nro_cuenta = cuenta?.nro_cuenta ?? 0,
+            saldo = cuenta?.saldo ?? 0m,
+            cbu = cuenta?.CBU ?? "Sin CBU"
+        });
+    }
     // ================================
     // ==== MÉTODO PUT PARA ACTUALIZAR DATOS DEL USUARIO (sin ID en la ruta) ====
-    [Authorize(Roles = "Billetera")]
+    [Authorize(Roles = "BILLETERA")]
     [HttpPut]
     public async Task<IActionResult> UpdateUsuario([FromBody] UpdateUsuarioDTO dto)
     {
@@ -229,11 +261,50 @@ public class UsuariosController : ControllerBase
         // 7️⃣ Devolver mensaje genérico
         return Ok("Datos actualizados exitosamente");
     }
+    [Authorize]
+    [HttpPut("basic-profile")]
+    public async Task<IActionResult> UpdateBasicProfile([FromBody] UsuarioUpdateDTO updateDto)
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!int.TryParse(userIdClaim, out int userId))
+            return Unauthorized("Token inválido o sin ID");
+
+        if (userId != updateDto.Id)
+            return Forbid("No puede modificar el perfil de otro usuario.");
+
+        bool actualizado = await _usuarioRepository.UpdateProfileAsync(updateDto);
+
+        if (!actualizado)
+            return BadRequest("No se pudo actualizar el perfil.");
+
+        return NoContent();
+    }
+    [Authorize]
+    [HttpGet("basic-profile")]
+    public async Task<ActionResult<UsuarioUpdateDTO>> GetBasicProfile()
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!int.TryParse(userIdClaim, out int userId))
+            return Unauthorized("Token inválido o sin ID");
+
+        var usuario = await _usuarioRepository.GetUsuarioByIdAsync(userId);
+        if (usuario == null)
+            return NotFound("Usuario no encontrado.");
+
+        var dto = new UsuarioUpdateDTO
+        {
+            Id = usuario.nro_cliente,
+            Nombre = usuario.nombre,
+            Apellido = usuario.apellido,
+            Mail = usuario.mail,
+            Telefono = usuario.telefono,
+            Direccion = usuario.direccion
+        };
+
+        return Ok(dto);
+    }
     // ================================
 }
-
-
-
 
 
 

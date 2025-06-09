@@ -153,7 +153,35 @@ namespace digitalArsv1.Repositories
             return await _context.Cuentas
                 .FirstOrDefaultAsync(c => c.nro_cuenta == numeroCuenta);
         }
+        public async Task<bool> TransferirAsync(int nroCuentaOrigen, int nroCuentaDestino, decimal monto)
+        {
+            var cuentaOrigen = await _context.Cuentas.FirstOrDefaultAsync(c => c.nro_cuenta == nroCuentaOrigen);
+            var cuentaDestino = await _context.Cuentas.FirstOrDefaultAsync(c => c.nro_cuenta == nroCuentaDestino);
 
+            if (cuentaOrigen == null || cuentaDestino == null)
+                throw new Exception("Una de las cuentas no existe.");
+
+            if (cuentaOrigen.saldo < monto)
+                throw new Exception("Saldo insuficiente en la cuenta de origen.");
+
+            var movimiento = new Movimiento
+            {
+                fecha = DateTime.Now,
+                monto = monto,
+                nro_cuenta_orig = nroCuentaOrigen,
+                nro_cuenta_dest = nroCuentaDestino,
+                codigo_transaccion = 1 // 1 = Transferencia
+            };
+
+            cuentaOrigen.saldo -= monto;
+            cuentaDestino.saldo += monto;
+
+            _context.Movimientos.Add(movimiento);
+
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
 
 
 
